@@ -1,138 +1,141 @@
 # GitViewr
 
-Understand your Git repositories.
+> Understand your Git repositories.
 
-GitViewr is a desktop application—built with **Tauri 2** (Rust backend + web frontend)—that analyzes a Git repository and turns its history into clear, useful insights: commit timelines, file change matrices, contributor activity, and time-based analytics. It works with local repositories and public GitHub URLs.
+GitViewr is a desktop application that opens a Git repository, walks its history, and turns it into readable views of commits, changes, contributors, and activity over time. It works with local folders and public GitHub repositories.
 
-> #### Note: GitViewr is a **read-only analyzer**. It never modifies your repository's history, refs, or working tree.
+It is read-only — GitViewr never writes to the repository you analyze; it only reads it with [libgit2](https://libgit2.org/).
+
+[![CI](https://github.com/pvk-96/gitviewr/actions/workflows/ci.yml/badge.svg)](https://github.com/pvk-96/gitviewr/actions/workflows/ci.yml)
+
+![GitViewr home](docs/screenshots/homepage.png)
 
 ## Features
 
-- **Open a local repository** — pick any folder containing a `.git` directory.
-- **Analyze a GitHub repository** — paste a URL like `https://github.com/owner/repository`; GitViewr clones it into a managed cache and analyzes it.
-- **Repository overview** — branches, tracked files, contributor count, first/latest commit, total additions/deletions.
-- **Commits** — full history (newest first) with per-commit subject, author, timing, and per-file change summaries.
-- **Changes** — per-file statistics (times changed, additions, deletions, last touched) sorted by churn.
-- **Analytics**
-  - Commits over time (monthly buckets).
-  - Contributor table with per-author commit/add/delete totals.
-  - File hot-spots (files with the most changes).
-  - Timeline chart combining commits, additions, and deletions per month.
-- **Recent repositories** — the last three distinct recent repositories are remembered (deduplicated, most-recent first).
-- **Export** — save a report as **HTML**, **JSON**, or **PDF** to any location.
-- **About** — developer site and support links.
+- **Local or GitHub** — open any folder containing a `.git` directory, or paste a `https://github.com/owner/repository` URL. GitHub repositories are cloned once into a managed cache and reused on later analyses.
+- **Repository overview** — current branch, number of branches and tracked files, contributor count, first and latest commit dates, and total additions/deletions.
+- **Commit history** — newest-first list with subject, author, date, and per-file deltas; click any commit for a detail view.
+- **File changes** — per-file statistics (status, times changed, additions, deletions, last touched) with search and status filtering.
+- **Analytics** — monthly commit activity and line churn, per-contributor contributions, a cumulative code-growth chart, and a file-hotspots table.
+- **Recent repositories** — the last three are remembered (deduplicated, most recent first).
+- **Export** — save the analysis as HTML, JSON, or PDF.
+- **About** — version, developer site, and support link.
 
-## Requirements
+## Screenshots
 
-- [Rust](https://www.rust-lang.org/tools/install) (rustc 1.77+)
-- [Node.js](https://nodejs.org) (npm, Vite 5)
-- [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/):
-  - Linux: `webkit2gtk-4.1`, `gtk3`, `libsoup3`, `libayatana-appindicator3-dev` (and `libssl-dev`, `cmake`, `pkg-config` for OpenSSL/libgit2).
-  - macOS: Xcode command-line tools.
-  - Windows: WebView2 (preinstalled on Windows 11 / recent Windows 10).
+<table>
+  <tr>
+    <td><img src="docs/screenshots/repo-info.png" alt="Repository overview" width="100%"><br><em>Repository overview</em></td>
+    <td><img src="docs/screenshots/commit-history.png" alt="Commit history" width="100%"><br><em>Commit history</em></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/commit-detail.png" alt="Commit detail" width="100%"><br><em>Commit detail</em></td>
+    <td><img src="docs/screenshots/changes.png" alt="File changes" width="100%"><br><em>File changes</em></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/analytics.png" alt="Analytics" width="100%"><br><em>Analytics</em></td>
+  </tr>
+</table>
 
-GitViewr uses **libgit2** (via the `git2` crate) for all repository access, so no system `git` binary is required at runtime.
+## Installation
 
-## Getting started
+**From a release** — grab the latest package for your platform from the [Releases](https://github.com/pvk-96/gitviewr/releases) page. v0.1.0 ships Linux packages (`.deb` and `.rpm`); macOS and Windows builds still need packaging work (see [Roadmap](#roadmap)).
 
-```bash
-npm install
-```
+**From source** — see [Development](#development).
 
-### Run in development
+## Usage
 
-```bash
-npm run tauri dev
-```
+1. Open **Repository** and pick a local folder, or paste a public GitHub URL.
+2. Wait for the analysis — progress is shown while the history is walked.
+3. Browse **Repository**, **Commits**, **Changes**, and **Analytics**.
+4. Optionally export the result to HTML, JSON, or PDF from the **Export** tab.
 
-This starts the Vite dev server (`http://localhost:1420`) and launches the Tauri app.
+## How it works
 
-### Run the tests
+The backend opens the repository with libgit2 and walks its full commit history from the checked-out branch, generating parent-versus-child diffs with rename detection enabled. From that it builds the per-commit records, repository statistics, contributor totals, monthly time buckets, and per-file churn data you see in the UI.
 
-```bash
-npm run test          # frontend unit tests (Vitest)
-cargo test            # Rust unit + integration tests (Rust)
-```
+Merge commits are diffed against their first parent, so a merge's changes reflect what it brought in rather than a three-way comparison. The JSON analysis is parsed directly from the app, which is why export output always matches what is on screen.
 
-### Production build
+## Export
 
-```bash
-npm run tauri build
-```
+Three formats, all written to a location you choose:
 
-Output installers land in `src-tauri/target/release/bundle/`.
-
-## Project structure
-
-```
-.
-├── src/                        # Frontend (React)
-│   ├── App.jsx                 # App shell, navigation, shared state
-│   ├── pages/                  # One page per sidebar tab
-│   │   ├── RepositoryPage.jsx  # Open local repo / GitHub URL
-│   │   ├── CommitsPage.jsx     # Commit history + diff details
-│   │   ├── ChangesPage.jsx     # Per-file change matrix
-│   │   ├── AnalyticsPage.jsx   # Charts + contributor/activity tables
-│   │   ├── RecentPage.jsx      # Recent repository list (only 3 recent repositories allowed right now for simplicity.)
-│   │   ├── ExportPage.jsx      # HTML/JSON/PDF export (plain export onely, formatted export_repot for easy readability will be added later.)
-│   │   └── AboutPage.jsx
-│   ├── components/             # Sidebar, empty state, commit modal
-│   ├── hooks/                  # Analysis progress listener
-│   └── utils/                  # Icons, date/number formatting
-└── src-tauri/                  # Backend (Rust)
-    ├── src/
-    │   ├── models/             # AnalysisData, Repository, Commit, …
-    │   ├── git/                # RepoInfo, commit-history walker, errors
-    │   ├── services/           # Analyzer, GitHub clone, exporters
-    │   │   └── exporter/       # HTML / JSON / PDF report writers (will add formatted export_report later)
-    │   ├── storage/            # Recent-repository store
-    │   ├── commands/           # Tauri IPC commands
-    │   └── utils/              # Date conversions
-    ├── tests/                  # Integration tests against real git repos
-    └── tauri.conf.json
-```
-
-## Architecture and data flow
-
-1. The frontend asks the backend to analyze a repository: `analyze_local_repository` (path) or `analyze_github_repository` (URL).
-2. The backend opens the repository with libgit2, walks its full history (parents-first diffs with rename detection enabled), and aggregates:
-   - per-commit records (subject, author, timestamp, per-file deltas),
-   - repository statistics,
-   - contributor totals,
-   - monthly time buckets,
-   - per-file churn statistics.
-3. Progress is streamed back via `analysis-progress` events while walking.
-4. The frontend renders the result; on completion the backend remembers the repository in the recent store.
-5. Exports are produced by writing HTML (inline CSS), JSON (analysis payload + generation metadata), or a hand-rolled PFD document. The JSON analysis payload is passed back from the frontend to the exporter so the report matches exactly what is on screen.
-
-### IPC surface
-
-| Command                   | Purpose                                   |
-| ------------------------- | ----------------------------------------- |
-| `analyze_local_repository`   | Analyze a local path                      |
-| `analyze_github_repository`  | Clone + analyze a GitHub URL              |
-| `get_recent_repositories`    | List recent repos                         |
-| `export_report`              | Write HTML/JSON/PDF report                |
-| `open_external_url`          | Open a URL in the default browser         |
-
-### Storage
-
-- Recent repositories: `{app data dir}/recent.json` (max 3, duplicates not shown)
-- GitHub clones: `{app data dir}/repositories/github_{owner}__{repo}` (reused if present).
+- **HTML** — a styled standalone report with the repository stats, contributors, and commit history.
+- **JSON** — the full analysis payload plus generation metadata, handy if you want to process it yourself.
+- **PDF** — a plain-text A4 report. The PDF writer is intentionally minimal (a built-in generator using base-14 Helvetica fonts): tables are simple and line-based, Latin-1 only, and any non-Latin characters render as `?`.
 
 ## Limitations
 
-- Analyzes the **default / checked-out branch** of the repository.
-- GitHub support requires a public repository and an internet connection on first analysis.
-- PDF export uses a minimal built-in PDF writer (base-14 Helvetica fonts); it is plain-text only, so non-Latin characters render as `?`.
-- Large repositories take longer; progress is reported on the Commits/Analytics phases only.
+- Analysis covers the **default / checked-out branch**; there is no branch or commit-range selection yet.
+- GitHub support is for **public repositories only**, and the first analysis needs an internet connection to clone.
+- PDF export is minimal (see above).
 - Merge commits include the aggregate diff against the first parent.
+- Large repositories take longer to analyze; progress is streamed during the history walk.
 
-## Future ideas
+## Tech stack
 
-- Selectable branch / commit range analysis.
-- Windows installer (the build currently targets Linux).
+- [Tauri 2](https://tauri.app)
+- Rust
+- React
+- JavaScript
+- [Vite](https://vite.dev)
+- libgit2 (via the [`git2`](https://crates.io/crates/git2) crate)
 
-## License / Support
+No system `git` binary is needed at runtime.
 
-See the About tab inside the app. Development site: https://pvk96.in
+## Development
+
+Prerequisites:
+
+- [Rust](https://www.rust-lang.org/tools/install) — a recent stable toolchain; CI builds with 1.98.
+- [Node.js](https://nodejs.org) 20+ and npm.
+- [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform (on Linux: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, and OpenSSL development files for libgit2).
+
+```bash
+npm install
+
+# run the app in development
+npm run tauri dev
+
+# frontend unit tests (Vitest)
+npm test
+
+# Rust unit + integration tests
+cd src-tauri && cargo test
+
+# build release bundles
+npm run tauri build
+```
+
+The frontend tests use Vitest; the Rust tests create throwaway git repositories with real libgit2, so no network or existing repos are needed for `cargo test`. One integration test (`github_e2e`) is gated behind `GITVIEWR_NETWORK_TESTS=1`.
+
+## Architecture
+
+```
+React            UI, per-tab pages, local state only
+  ↓  Tauri IPC (commands)
+Rust             thin command handlers → services
+  ↓
+libgit2          history walk, diffs, metadata      storage → recent.json, clone cache
+  ↓
+AnalysisData     typed JSON models
+  ↓
+React UI          or  exporters (HTML / JSON / PDF)
+```
+
+The layout is deliberately simple: `src/` holds the React frontend, `src-tauri/src/` the Rust backend split into `commands/` (IPC handlers), `git/` (libgit2 access), `services/` (analysis and exporters), `models/` (shared data types), and `storage/` (the recent-repositories store). Clone cache lives under the app-data directory, so repositories are never cloned into random locations.
+
+## Roadmap
+
+- Branch and commit-range selection.
+- Windows packaging.
+- Cleanup items only visible to the developer (PDF writer internals, report templating).
+
+If you want something else, open an issue on GitHub.
+
+## About
+
+GitViewr is developed by [Praneeth Varma K](https://pvk96.in). If you find it useful, you can [buy me a coffee](https://www.buymeacoffee.com/pvk96).
+
+- Website: <https://pvk96.in>
+- GitHub: <https://github.com/pvk-96/gitviewr>
